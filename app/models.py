@@ -1,5 +1,5 @@
 from pydantic import BaseModel
-from typing import List, Optional, Dict, Any
+from typing import List, Optional
 
 class ProcessingResult(BaseModel):
     filename: str
@@ -7,7 +7,7 @@ class ProcessingResult(BaseModel):
     message: Optional[str] = None
     extracted_images_count: int = 0
     tables_found: int = 0
-    output_path: Optional[str] = None
+    output_markdown_path: Optional[str] = None # Changed to point to the single file
 
 class BatchResponse(BaseModel):
     job_id: str
