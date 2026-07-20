@@ -33,7 +33,7 @@ Transaction Information
 
 Award Type:
 
-DeliveryfTask Order
+Delivery/Task Order
 
 Prepared Date:
 
@@ -203,7 +203,7 @@ Major Program:
 
 National Interest Action:
 
-V
+☑
 
 Contracting Office Agency Name:
 
@@ -233,7 +233,7 @@ District:
 
 Business Types
 
-✓corporate Entity, Not Tax Exempt
+✓corporate Entity, Not Tax Exemptempt
 
 Socio Economic Data
 
@@ -279,11 +279,11 @@ Other Functions
 
 No
 
-V
+☑
 
 Select One
 
-V
+☑
 
 Trans No
 
@@ -297,28 +297,20 @@ $12,206,039.61
 
 $0.00
 
-J
+☐
 
-V
+☑
 
 ( Sho&gt;.
 
 tails  )
 
-V
+☑
 
-V
+☑
 
 ## Print
 
 ## Close
 
 ## Help
-
-Remove Exceptior
-
-<!-- image -->
-
-<!-- image -->
-
-<!-- image -->
