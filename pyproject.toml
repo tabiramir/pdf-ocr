@@ -1,0 +1,14 @@
+[project]
+name = "pdf-ocr"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.13"
+dependencies = [
+    "fastapi>=0.139.2",
+    "pydantic>=2.13.4",
+    "pymupdf>=1.28.0",
+    "pymupdf4llm>=1.28.0",
+    "python-multipart>=0.0.32",
+    "uvicorn[standard]>=0.51.0",
+]
