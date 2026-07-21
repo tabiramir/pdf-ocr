@@ -1,4 +1,5 @@
 import os
+import pathlib
 from fastapi import UploadFile
 
 
@@ -16,7 +17,10 @@ class PDFIngestor:
     async def save_upload_file(file: UploadFile, dest_dir: str) -> str:
         """Save uploaded file to disk for processing."""
         os.makedirs(dest_dir, exist_ok=True)
-        file_path = os.path.join(dest_dir, file.filename)
+        # Sanitize filename to prevent path traversal (e.g., ../../etc/passwd)
+        safe_filename = pathlib.Path(file.filename).name
+        file_path = os.path.join(dest_dir, safe_filename)
+        
         with open(file_path, "wb") as buffer:
             while chunk := await file.read(1024 * 1024):
                 buffer.write(chunk)
