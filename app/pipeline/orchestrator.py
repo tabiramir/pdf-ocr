@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 import os
 import logging
 import pymupdf4llm
@@ -42,12 +43,30 @@ class PipelineOrchestrator:
             except Exception as e:
                 logger.warning(f"PPStructure OCR analyzer failed to initialize, will skip: {e}")
 
+=======
+# app/pipeline/orchestrator.py
+import os
+import logging
+from app.pipeline.analyzer import TableAndTextAnalyzer
+from app.pipeline.extractor import ImageExtractor
+from app.models import ProcessingResult
+
+logger = logging.getLogger(__name__)
+
+class PipelineOrchestrator:
+    def __init__(self, base_output_dir: str):
+        self.base_output_dir = base_output_dir
+        # Initialize analyzer once
+        self.analyzer = TableAndTextAnalyzer()
+        
+>>>>>>> 1520820c0c65fddbc5d67dfc5c6c73f0338f8b62
     async def process_batch(self, valid_files: list) -> list:
         results = []
         for file_path, filename in valid_files:
             doc_name = os.path.splitext(filename)[0]
             output_dir = os.path.join(self.base_output_dir, doc_name)
             os.makedirs(output_dir, exist_ok=True)
+<<<<<<< HEAD
             image_extractor = ImageExtractor(output_dir=output_dir)
             try:
                 logger.info(f"Starting processing for {filename}...")
@@ -121,11 +140,32 @@ class PipelineOrchestrator:
                     f.write(cleaned_md)
                 logger.info(f"Saved output to: {text_file_path}")
 
+=======
+            
+            # Initialize image extractor per job
+            image_extractor = ImageExtractor(output_dir=output_dir)
+            
+            try:
+                # 1. Analyze Text and Tables (Now runs in thread pool inside analyzer)
+                analysis_result = self.analyzer.analyze_document(file_path, output_dir, doc_name)
+                
+                # 2. Extract Images (Optional: Skip if not needed for FPDS)
+                # images = image_extractor.extract_images(file_path, doc_name)
+                images = [] # Commented out for speed if images aren't critical
+                
+                # 3. Save Markdown
+                md_filename = f"{doc_name}.md"
+                text_file_path = os.path.join(output_dir, md_filename)
+                with open(text_file_path, "w", encoding="utf-8") as f:
+                    f.write(analysis_result["text_content"])
+                    
+>>>>>>> 1520820c0c65fddbc5d67dfc5c6c73f0338f8b62
                 results.append(ProcessingResult(
                     filename=filename,
                     status="success",
                     message="Processed successfully",
                     extracted_images_count=len(images),
+<<<<<<< HEAD
                     tables_found=cleaned_md.count("| ---"),
                     output_markdown_path=text_file_path,
                     spatial_data=spatial_data or None,
@@ -178,3 +218,16 @@ class PipelineOrchestrator:
         except Exception as e:
             logger.error(f"Fallback extraction failed for {pdf_path}: {e}")
         return page_texts, weak_pages
+=======
+                    tables_found=analysis_result["metadata"]["tables_count"],
+                    output_markdown_path=text_file_path
+                ))
+            except Exception as e:
+                logger.error(f"Failed to process {filename}: {e}")
+                results.append(ProcessingResult(
+                    filename=filename,
+                    status="error",
+                    message=str(e)
+                ))
+        return results
+>>>>>>> 1520820c0c65fddbc5d67dfc5c6c73f0338f8b62

@@ -2,17 +2,28 @@ import os
 import fitz  # PyMuPDF
 import logging
 
+<<<<<<< HEAD
 # FIX: Changed 'name' to '__name__'
 logger = logging.getLogger(__name__)
 
 class ImageExtractor:
     # FIX: Changed 'init' to '__init__'
+=======
+logger = logging.getLogger(__name__)
+
+class ImageExtractor:
+>>>>>>> 1520820c0c65fddbc5d67dfc5c6c73f0338f8b62
     def __init__(self, output_dir: str):
         self.output_dir = output_dir
 
     def extract_images(self, pdf_path: str, doc_name: str) -> list:
         """
         Extract embedded images from PDF.
+<<<<<<< HEAD
+=======
+        Note: Docling's markdown export might already reference images if configured,
+        but this ensures physical copies exist if you need them for RAG vector stores later.
+>>>>>>> 1520820c0c65fddbc5d67dfc5c6c73f0338f8b62
         """
         saved_images = []
         try:
@@ -26,12 +37,22 @@ class ImageExtractor:
                     base_image = doc.extract_image(xref)
                     image_bytes = base_image["image"]
                     image_ext = base_image["ext"]
+<<<<<<< HEAD
                     # Sanitize filename
                     safe_name = "".join(c if c.isalnum() else "_" for c in doc_name)
                     filename = f"{safe_name}_p{page_index + 1}_img{img_index}.{image_ext}"
                     filepath = os.path.join(self.output_dir, filename)
                     with open(filepath, "wb") as img_file:
                         img_file.write(image_bytes)
+=======
+                    
+                    filename = f"{doc_name}_p{page_index+1}_img{img_index}.{image_ext}"
+                    filepath = os.path.join(self.output_dir, filename)
+                    
+                    with open(filepath, "wb") as img_file:
+                        img_file.write(image_bytes)
+                    
+>>>>>>> 1520820c0c65fddbc5d67dfc5c6c73f0338f8b62
                     saved_images.append(filepath)
                     img_counter += 1
             doc.close()
