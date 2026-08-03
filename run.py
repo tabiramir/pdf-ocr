@@ -1,10 +1,12 @@
+# run.py
 import uvicorn
 
 if __name__ == "__main__":
-    # This starts the server using the Python API instead of the CLI executable
+    # app.main:app means "look in the 'app' package, inside 'main.py', for the 'app' object"
     uvicorn.run(
         "app.main:app", 
-        host="127.0.0.1", 
+        host="0.0.0.0", 
         port=8000, 
-        reload=True
+        reload=True,
+        log_level="info"
     )

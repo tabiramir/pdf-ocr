@@ -4,7 +4,35 @@ __pycache__/
 build/
 dist/
 wheels/
-*.egg-info
+*.egg-info/
 
 # Virtual environments
-.venv
+.venv/
+venv/
+env/
+
+# Environment variables (SECRETS - NEVER COMMIT)
+.env
+.env.local
+.env.*.local
+
+# IDE / Editor files (optional but recommended)
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS files (optional)
+.DS_Store
+Thumbs.db
+
+# Testing / Coverage reports
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+
+# uv specific
+# Do NOT ignore uv.lock (commit it!)
+# But ignore local uv cache if needed
+.uv-cache/

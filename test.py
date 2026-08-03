@@ -1,42 +1,46 @@
 import requests
-import glob
 import os
+import glob
 
-#  CHANGE THIS TO YOUR ACTUAL FOLDER PATH
-PDF_FOLDER = r"C:\Users\TabraJavaid\Downloads\files" 
+# 1. Define the folder containing your PDFs (Update this path!)
+pdf_folder = "/Users/tabra.javaid/Downloads/files" 
 
-url = "http://127.0.0.1:8000/process-batch/"
+# 2. Get all PDF files
+pdf_files = glob.glob(os.path.join(pdf_folder, "*.pdf"))
 
-# Automatically find ALL .pdf files in the folder (case-insensitive)
-file_paths = glob.glob(os.path.join(PDF_FOLDER, "*.pdf")) + \
-             glob.glob(os.path.join(PDF_FOLDER, "*.PDF"))
+if not pdf_files:
+    print("❌ No PDFs found in the specified folder!")
+    exit()
 
-if not file_paths:
-    print(f"❌ No PDF files found in: {PDF_FOLDER}")
-    exit(1)
+print(f"🔍 Found {len(pdf_files)} PDF(s) in folder.")
 
-print(f"🔍 Found {len(file_paths)} PDF(s) in folder.")
+# 3. Prepare the files for multipart upload
+files_to_upload = []
+for pdf_path in pdf_files:
+    filename = os.path.basename(pdf_path)
+    print(f"  ✅ Loaded: {filename}")
+    # The field name "files" MUST match the argument name in your FastAPI endpoint
+    files_to_upload.append(
+        ("files", (filename, open(pdf_path, "rb"), "application/pdf"))
+    )
 
-files_to_send = []
-for path in file_paths:
-    try:
-        filename = os.path.basename(path)
-        files_to_send.append(("files", (filename, open(path, "rb"), "application/pdf")))
-        print(f"  ✅ Loaded: {filename}")
-    except Exception as e:
-        print(f"  ⚠️  Skipped '{filename}': {e}")
+try:
+    # 4. Send the POST request to the CORRECT endpoint
+    url = "http://localhost:8000/process-batch/"
+    
+    print(f"\n🚀 Sending {len(files_to_upload)} file(s) to {url}...")
+    
+    response = requests.post(url, files=files_to_upload)
+    
+    print(f"\n✅ Status Code: {response.status_code}")
+    print(response.json())
 
-if not files_to_send:
-    print("❌ No valid files could be loaded.")
-else:
-    print(f"\n🚀 Sending {len(files_to_send)} file(s) to server...")
-    try:
-        response = requests.post(url, files=files_to_send)
-        print(f"✅ Status Code: {response.status_code}")
-        
-        # Pretty print the JSON response
-        import json
-        print(json.dumps(response.json(), indent=2))
-        
-    except requests.exceptions.ConnectionError:
-        print("❌ Connection Error: Is your FastAPI server running? Run 'python run.py' first.")
+except requests.exceptions.ConnectionError:
+    print("❌ Connection Error: Is the uvicorn server running?")
+except Exception as e:
+    print(f"❌ Error: {e}")
+
+finally:
+    # Always close file handles to prevent memory leaks
+    for _, (_, f, _) in files_to_upload:
+        f.close()
