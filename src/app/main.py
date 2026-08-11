@@ -2,8 +2,7 @@ import os
 import uuid
 import shutil
 import warnings
-from fastapi import FastAPI, File, UploadFile, HTTPException, BackgroundTasks
-from typing import List
+from fastapi import FastAPI, File, UploadFile, HTTPException
 import logging
 
 from app.pipeline.ingestor import PDFIngestor
@@ -28,11 +27,10 @@ orchestrator = PipelineOrchestrator(base_output_dir="./output")
 
 @app.post("/process-batch/", response_model=BatchResponse)
 async def process_batch_pdfs(
-    background_tasks: BackgroundTasks,
-    files: List[UploadFile] = File(...)
+    file: UploadFile = File(...)
 ):
     """
-    Accepts multiple PDF files, validates them, and processes them.
+    Accepts a single PDF file, validates it, and processes it.
     """
     job_id = str(uuid.uuid4())
     temp_dir = f"./temp/{job_id}"
@@ -41,46 +39,42 @@ async def process_batch_pdfs(
     valid_files = []
     invalid_files = []
 
-    # 1. Validation & Saving Phase
-    for file in files:
-        # Check extension
-        if not file.filename or not file.filename.lower().endswith('.pdf'):
-            logger.warning(f"Skipping {file.filename}: Not a PDF extension")
-            invalid_files.append({"filename": file.filename, "reason": "Not a PDF extension"})
-            continue
-            
-        # Validate content
-        try:
-            is_valid_pdf = await ingestor.validate_pdf(file)
-        except Exception as e:
-            logger.warning(f"Could not validate {file.filename}: {e}")
-            invalid_files.append({"filename": file.filename, "reason": f"Validation error: {str(e)}"})
-            continue
-
-        if not is_valid_pdf:
-            logger.warning(f"Skipping {file.filename}: Invalid PDF magic bytes")
-            invalid_files.append({"filename": file.filename, "reason": "Invalid PDF Magic Bytes"})
-            continue
-            
-        # Save to temp dir
-        try:
-            saved_path = await ingestor.save_upload_file(file, temp_dir)
-            valid_files.append((saved_path, file.filename))
-            logger.info(f"Successfully saved {file.filename} to temp")
-        except Exception as e:
-            logger.error(f"Failed to save {file.filename}: {e}")
-            invalid_files.append({"filename": file.filename, "reason": f"Save error: {str(e)}"})
-
-    # Check if we have any valid files to process
-    if not valid_files:
-        # Cleanup empty temp dir
+    # Check extension
+    if not file.filename or not file.filename.lower().endswith('.pdf'):
+        logger.warning(f"Skipping {file.filename}: Not a PDF extension")
         if os.path.exists(temp_dir):
             shutil.rmtree(temp_dir)
-        raise HTTPException(status_code=400, detail="No valid PDF files provided.")
+        raise HTTPException(status_code=400, detail="Not a PDF file.")
         
+    # Validate content
+    try:
+        is_valid_pdf = await ingestor.validate_pdf(file)
+    except Exception as e:
+        logger.warning(f"Could not validate {file.filename}: {e}")
+        if os.path.exists(temp_dir):
+            shutil.rmtree(temp_dir)
+        raise HTTPException(status_code=400, detail=f"Validation error: {str(e)}")
+
+    if not is_valid_pdf:
+        logger.warning(f"Skipping {file.filename}: Invalid PDF magic bytes")
+        if os.path.exists(temp_dir):
+            shutil.rmtree(temp_dir)
+        raise HTTPException(status_code=400, detail="Invalid PDF Magic Bytes.")
+        
+    # Save to temp dir
+    try:
+        saved_path = await ingestor.save_upload_file(file, temp_dir)
+        valid_files.append((saved_path, file.filename))
+        logger.info(f"Successfully saved {file.filename} to temp")
+    except Exception as e:
+        logger.error(f"Failed to save {file.filename}: {e}")
+        if os.path.exists(temp_dir):
+            shutil.rmtree(temp_dir)
+        raise HTTPException(status_code=500, detail=f"Save error: {str(e)}")
+
     # 2. Processing Phase
     try:
-        logger.info(f"Starting batch processing for {len(valid_files)} files...")
+        logger.info(f"Starting processing for {len(valid_files)} file(s)...")
         results = await orchestrator.process_batch(valid_files)
         
         return BatchResponse(
@@ -89,7 +83,7 @@ async def process_batch_pdfs(
         )
         
     except Exception as e:
-        logger.error(f"Batch processing failed: {e}", exc_info=True)
+        logger.error(f"Processing failed: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"Processing failed: {str(e)}")
     
     finally:
