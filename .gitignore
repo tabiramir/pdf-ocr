@@ -32,6 +32,12 @@ Thumbs.db
 htmlcov/
 .tox/
 
+# Generated OCR output
+output/
+
+# Working / intermediate files
+temp/
+
 # uv specific
 # Do NOT ignore uv.lock (commit it!)
 # But ignore local uv cache if needed

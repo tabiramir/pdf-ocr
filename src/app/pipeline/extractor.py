@@ -5,9 +5,6 @@ import logging
 logger = logging.getLogger(__name__)
 
 class ImageExtractor:
-    logger = logging.getLogger(__name__)
-
-class ImageExtractor:
     def __init__(self, output_dir: str):
         self.output_dir = output_dir
 
@@ -33,13 +30,7 @@ class ImageExtractor:
                     filepath = os.path.join(self.output_dir, filename)
                     with open(filepath, "wb") as img_file:
                         img_file.write(image_bytes)
-                    
-                    filename = f"{doc_name}_p{page_index+1}_img{img_index}.{image_ext}"
-                    filepath = os.path.join(self.output_dir, filename)
-                    
-                    with open(filepath, "wb") as img_file:
-                        img_file.write(image_bytes)
-                    
+
                     saved_images.append(filepath)
                     img_counter += 1
             doc.close()

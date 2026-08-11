@@ -1,34 +1,15 @@
 [project]
 name = "pdf-ocr"
 version = "0.1.0"
-description = "Add your description here"
+description = "Advanced PDF processing pipeline: extracts text, tables, images, and spatial data from PDFs (optimized for FPDS/government forms)."
 readme = "README.md"
 requires-python = ">=3.13"
 dependencies = [
     "docling>=2.114.0",
     "fastapi>=0.139.2",
-    "pydantic>=2.13.4",
-    "pymupdf>=1.28.0",
-    "pymupdf4llm>=1.28.0",
-    "python-multipart>=0.0.32",
-    "uvicorn[standard]>=0.51.0",
-    "paddleocr>=2.7.0",  # Add this line
-]
-[build-system]
-requires = ["setuptools>=64"]
-build-backend = "setuptools.build_meta"
-
-[tool.setuptools.packages.find]
-where = ["src"]
-[project]
-name = "pdf-ocr"
-version = "0.1.0"
-description = "Add your description here"
-readme = "README.md"
-requires-python = ">=3.13"
-dependencies = [
-    "docling>=2.114.0",
-    "fastapi>=0.139.2",
+    "paddleocr>=2.7.0",
+    "paddlepaddle>=3.3.0",
+    "paddlex[ocr]>=3.2.0",
     "pydantic>=2.13.4",
     "pymupdf>=1.28.0",
     "pymupdf4llm>=1.28.0",

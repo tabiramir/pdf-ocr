@@ -3,7 +3,7 @@ import os
 import glob
 
 # 1. Define the folder containing your PDFs (Update this path!)
-pdf_folder = "/Users/tabra.javaid/Downloads/files" 
+pdf_folder = "/Users/tabra.javaid/Documents/files" 
 
 # 2. Get all PDF files
 pdf_files = glob.glob(os.path.join(pdf_folder, "*.pdf"))

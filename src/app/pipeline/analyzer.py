@@ -1,7 +1,6 @@
 import os
 import logging
 import fitz  # PyMuPDF
-import pymupdf4llm
 from app.utils.cleaner import FPDSMarkdownCleaner
 
 logger = logging.getLogger(__name__)
@@ -160,16 +159,46 @@ class PPStructureAnalyzer:
         table_count = 0
         if not result:
             return "", 0
-        
-        for region in result:
-            if not isinstance(region, dict):
+
+        for page_result in result:
+            # Current paddleocr 3.x / paddlex format: LayoutParsingResultV2
+            # with a 'parsing_res_list' of LayoutBlock objects.
+            if hasattr(page_result, "keys") and "parsing_res_list" in page_result:
+                    blocks = list(page_result.get("parsing_res_list", []))
+                    blocks.sort(key=lambda b: getattr(b, "index", 0))
+                    for block in blocks:
+                        label = getattr(block, "label", "") or ""
+                        content = getattr(block, "content", "") or ""
+                        content = content.strip()
+
+                        if label == "table":
+                            if content:
+                                markdown_parts.append(f"\n{content}\n")
+                                table_count += 1
+                        elif label in ("title", "doc_title", "section_header", "header"):
+                            if content:
+                                markdown_parts.append(f"### {content}\n")
+                        elif label == "text":
+                            if content:
+                                markdown_parts.append(f"{content}\n")
+                        elif label in ("image", "figure"):
+                            if content:
+                                markdown_parts.append(f"{content}\n")
+                            else:
+                                markdown_parts.append("[Image/Figure Detected]\n")
+                        elif content:
+                            markdown_parts.append(f"{content}\n")
+                    continue
+
+            # Legacy format: list of dicts with 'type' and 'res'
+            if not isinstance(page_result, dict):
                 continue
-            
-            res_data = region.get('res', region) 
-            
-            region_type = region.get("type", "")
+
+            res_data = page_result.get('res', page_result)
+
+            region_type = page_result.get("type", "")
             if not region_type and isinstance(res_data, dict):
-                 region_type = res_data.get("type", "")
+                region_type = res_data.get("type", "")
 
             if region_type == "table":
                 html_table = ""
@@ -179,61 +208,23 @@ class PPStructureAnalyzer:
                     markdown_parts.append(f"\n{html_table}\n")
                     table_count += 1
             elif region_type in ["title", "header"]:
-                text = region.get("text", "")
+                text = page_result.get("text", "")
                 if not text and isinstance(res_data, dict):
                     text = res_data.get("text", "")
                 if text:
                     markdown_parts.append(f"### {text}\n")
             elif region_type == "text":
-                text = region.get("text", "")
+                text = page_result.get("text", "")
                 if not text and isinstance(res_data, dict):
                     text = res_data.get("text", "")
                 if text:
                     markdown_parts.append(f"{text}\n")
             elif region_type == "figure":
                 markdown_parts.append("[Image/Figure Detected]\n")
-        
+
         return "\n".join(markdown_parts), table_count
 
 
-class TableAndTextAnalyzer:
-    """
-    Uses pymupdf4llm to extract text, tables, and basic spatial layout.
-    """
-    def __init__(self):
-        self.cleaner = FPDSMarkdownCleaner()
-        logger.info("TableAndTextAnalyzer (MuPDF backend) initialized.")
-
-    def analyze_document(self, pdf_path: str, output_dir: str, doc_name: str) -> dict:
-        result_data = {
-            "text_content": "",
-            "metadata": {"tables_count": 0, "pages_count": 0},
-            "spatial_data": [],
-        }
-        try:
-            page_chunks = pymupdf4llm.to_markdown(
-                pdf_path,
-                page_chunks=True,
-                show_progress=False,
-                write_images=False,
-            )
-            all_markdown_parts = []
-            total_tables = 0
-            for i, chunk in enumerate(page_chunks):
-                text = chunk.get("text", "")
-                if text.strip():
-                    all_markdown_parts.append(f"<!-- Page {i + 1} -->\n\n{text}")
-                total_tables += text.count("| ---")
-            raw_markdown = "\n\n---\n\n".join(all_markdown_parts)
-            cleaned_markdown = self.cleaner.clean_markdown(raw_markdown)
-            result_data["text_content"] = cleaned_markdown
-            result_data["metadata"]["tables_count"] = total_tables
-            result_data["metadata"]["pages_count"] = len(page_chunks)
-            logger.info(f"Analyzed {doc_name}: {len(page_chunks)} pages, {total_tables} tables.")
-        except Exception as e:
-            logger.error(f"Error analyzing {pdf_path}: {e}")
-            raise
-        return result_data
 from typing import List, Dict, Any
 from docling.document_converter import DocumentConverter
 from docling.datamodel.base_models import InputFormat
@@ -293,26 +284,50 @@ class TableAndTextAnalyzer:
 
     def _extract_bounding_boxes(self, conv_result) -> List[Dict[str, Any]]:
         """
-        Extracts text clusters with their bounding boxes from the Docling result.
+        Extracts text items with their bounding boxes from the Docling result.
+
+        Docling coordinates use a BOTTOMLEFT origin; they are normalized to
+        TOPLEFT so that smaller 't' means closer to the top of the page.
         """
         spatial_items = []
         try:
-            for page_no, page in enumerate(conv_result.document.pages):
-                if hasattr(page, 'items'):
-                    for item in page.items:
-                        if hasattr(item, 'text') and hasattr(item, 'bbox'):
-                            spatial_items.append({
-                                "page": page_no + 1,
-                                "text": item.text,
-                                "bbox": {
-                                    "l": item.bbox.l,
-                                    "t": item.bbox.t,
-                                    "r": item.bbox.r,
-                                    "b": item.bbox.b
-                                },
-                                "type": getattr(item, 'label', 'unknown')
-                            })
+            pages = conv_result.document.pages
+            for item in conv_result.document.texts:
+                if not item.prov:
+                    continue
+                prov = item.prov[0]
+                text = getattr(item, "text", "")
+                if not text:
+                    continue
+                page = pages.get(prov.page_no)
+                height = None
+                if page is not None:
+                    size = getattr(page, "size", None)
+                    if size is not None:
+                        height = size[1] if isinstance(size, (tuple, list)) else size.height
+
+                bbox = prov.bbox
+                t = bbox.t
+                b = bbox.b
+                if height is not None and getattr(bbox, "coord_origin", None) is not None:
+                    origin = bbox.coord_origin
+                    if "BOTTOMLEFT" in str(origin):
+                        t = height - bbox.t
+                        b = height - bbox.b
+
+                label = getattr(item, "label", None)
+                spatial_items.append({
+                    "page": prov.page_no,
+                    "text": text,
+                    "bbox": {
+                        "l": bbox.l,
+                        "t": t,
+                        "r": bbox.r,
+                        "b": b,
+                    },
+                    "type": getattr(label, "value", label),
+                })
         except Exception as e:
             logger.warning(f"Could not extract spatial data: {e}")
-            
+
         return spatial_items
