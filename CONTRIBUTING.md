@@ -43,16 +43,20 @@ branch protection).
 
 For **`dev`**:
 
-- Require a pull request before merging (1 approval, dismiss stale approvals)
+- Require a pull request before merging (0 approvals while the repository is
+  solo-maintained; raise to 1+ once there are collaborators, since GitHub
+  does not let you approve your own pull request)
 - Require the status check **Syntax check and unit tests**
 - Block force pushes and deletions
 - Do not allow bypassing the above settings
 
 For **`main`**: the same rules, plus restrict direct pushes to maintainers.
 
-> Branch protection on private repositories requires GitHub Pro. If the API
-> returns "Upgrade to GitHub Pro", either make the repository public or
-> upgrade and apply the rules manually.
+> **Plan requirement:** GitHub Free does not allow branch protection or
+> rulesets on private repositories — the API returns `403 Upgrade to GitHub
+> Pro`. Either upgrade to GitHub Pro or make the repository public, then
+> apply the rules above. Until then, the pull-request workflow is enforced by
+> convention only.
 
 ## Local checks
 
