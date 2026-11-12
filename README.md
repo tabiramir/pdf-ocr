@@ -155,7 +155,7 @@ src/app/
   into `dev` with **Squash and merge**.
 
 Every pull request runs the CI workflow in `.github/workflows/ci.yml`
-(byte-compile check + unit tests). `dev` and `main` are protected, so direct
-pushes are rejected and a passing CI run is required. See
-[CONTRIBUTING.md](CONTRIBUTING.md) for the full workflow and branch
-protection setup.
+(byte-compile check + unit tests), and a passing run is required before
+merging. `dev` and `main` are intended to be protected so direct pushes are
+rejected — see [CONTRIBUTING.md](CONTRIBUTING.md) for the setup steps and the
+GitHub plan requirement.
