@@ -146,3 +146,16 @@ src/app/
     kvp_extractor.py       # Key-value pair extraction
     parallel.py            # Page-bucketing helper for the thread pools
 ```
+
+## Branching & pull requests
+
+- `main` — stable, releasable code. Updated only by merging `dev`.
+- `dev` — integration branch; all feature work lands here via pull requests.
+- Topic branches (`feature/…`, `fix/…`) branch from `dev` and merge back
+  into `dev` with **Squash and merge**.
+
+Every pull request runs the CI workflow in `.github/workflows/ci.yml`
+(byte-compile check + unit tests). `dev` and `main` are protected, so direct
+pushes are rejected and a passing CI run is required. See
+[CONTRIBUTING.md](CONTRIBUTING.md) for the full workflow and branch
+protection setup.
