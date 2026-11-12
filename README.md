@@ -4,13 +4,43 @@ Advanced PDF processing pipeline that extracts text, tables, images, and spatial
 
 ## Features
 
-- **Primary text extraction** via `pymupdf4llm` (fast, page-aware Markdown)
-- **OCR fallback** for scanned/weak pages using PaddleOCR / PPStructure
-- **Structured table & spatial analysis** with Docling, with OCR fallback
+- **Page-level parallelism** — text extraction, page rasterisation, OCR, and image
+  extraction all run across a configurable thread pool (`PDF_OCR_MAX_WORKERS`)
+- **Primary text extraction** via `pymupdf4llm` (fast, page-aware Markdown),
+  with raw PyMuPDF as a fallback
+- **Primary structure/OCR engine: PaddleOCR (PP-StructureV3)** — OCRs every page
+  in parallel, replaces weak/scanned pages, and produces the spatial (bbox) data
+  used for key-value extraction
+- **Backup analyzer: Docling** — kicks in automatically when PaddleOCR is
+  unavailable, fails, or returns no spatial data
 - **Key-value pair extraction** from spatial layout data (e.g., form fields)
-- **Embedded image extraction** (per page)
-- **Markdown cleaning** tuned for FPDS forms
+- **Embedded image extraction** (per page, parallel)
+- **Markdown cleaning** tuned for FPDS forms (HTML tables from PaddleOCR are
+  converted to Markdown tables)
 - **Batch processing** of multiple PDFs via a FastAPI endpoint
+
+## Configuration
+
+All tunables are read from environment variables:
+
+| Variable | Default | Description |
+| --- | --- | --- |
+| `PDF_OCR_MAX_WORKERS` | `min(8, cpu_count)` | Pages processed concurrently per document |
+| `PDF_OCR_ENGINE_POOL` | `1` | Number of pooled PPStructureV3 engines (each ~5 GB warmed up; raise on big CPU/GPU boxes) |
+| `PDF_OCR_PADDLE_THREADS` | Paddle default | `cpu_threads` handed to each Paddle predictor |
+| `PDF_OCR_RENDER_SCALE` | `2.0` | Rasterisation scale for OCR (2.0 = 144 dpi) |
+| `PDF_OCR_PARALLEL_TEXT` | `true` | Run `pymupdf4llm` page extraction across the thread pool |
+
+> **Note on `PDF_OCR_PARALLEL_TEXT`:** parallel page buckets are extracted with one
+> `pymupdf4llm` pass per bucket, which can shift heading depth (`#` vs `##`) on some
+> pages. Content is unchanged. Set it to `false` for a single sequential pass with
+> byte-identical output to the non-parallel pipeline.
+
+Example:
+
+```bash
+PDF_OCR_MAX_WORKERS=4 PDF_OCR_ENGINE_POOL=2 python run.py
+```
 
 ## Requirements
 
@@ -76,10 +106,28 @@ python test.py
 
 Results are written to `output/<document name>/`:
 
-- `<document name>.md` — cleaned Markdown with per-page sections and an extracted key-value fields table (when spatial data is available)
-- `<document name>_page_*.png` — extracted embedded images
+- `<document name>.md` — cleaned Markdown with per-page sections (`<!-- Page N -->`),
+  PaddleOCR-OCR'd Markdown for weak/scanned pages, and an extracted key-value
+  fields table (when spatial data is available)
+- `<document name>_page_<n>.png` — page rasters generated for the PaddleOCR pass
+- `<safe document name>_p<n>_img<i>.<ext>` — extracted embedded images
 
 Intermediate files land in `temp/<job_id>/` and are cleaned up automatically after processing.
+
+## Pipeline
+
+```
+upload → validate → save
+   │
+   ├─ 1. text extraction ......... pymupdf4llm (pages in parallel) → raw PyMuPDF fallback
+   ├─ 2. structure / OCR ......... PaddleOCR PP-StructureV3 (pages in parallel)   [PRIMARY]
+   │                               └─ replaces weak/scanned pages, emits spatial data
+   ├─ 3. backup structure ........ Docling                                        [BACKUP]
+   │                               └─ used only if PaddleOCR yields no spatial data
+   ├─ 4. assemble Markdown → clean → append key-value fields table
+   ├─ 5. embedded image extraction (pages in parallel)
+   └─ 6. write output/<document name>/
+```
 
 ## Project layout
 
@@ -87,15 +135,14 @@ Intermediate files land in `temp/<job_id>/` and are cleaned up automatically aft
 src/app/
   main.py                  # FastAPI app (endpoints)
   models.py                # Pydantic response models
+  config.py                # Env-driven pipeline configuration
   pipeline/
     ingestor.py            # Upload validation & saving
     orchestrator.py        # Orchestrates the full pipeline
-    extractor.py           # Embedded image extraction
-    analyzer.py            # Docling + PPStructure analyzers
-    table_ocr_processor.py # Table OCR
-    layout_reconstructor.py
-    ocr_engine.py
+    extractor.py           # Embedded image extraction (page-parallel)
+    analyzer.py            # PaddleOCR (primary) + Docling (backup) analyzers
   utils/
     cleaner.py             # FPDS Markdown cleaning
     kvp_extractor.py       # Key-value pair extraction
+    parallel.py            # Page-bucketing helper for the thread pools
 ```
