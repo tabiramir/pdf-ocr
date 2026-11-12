@@ -156,6 +156,5 @@ src/app/
 
 Every pull request runs the CI workflow in `.github/workflows/ci.yml`
 (byte-compile check + unit tests), and a passing run is required before
-merging. `dev` and `main` are intended to be protected so direct pushes are
-rejected — see [CONTRIBUTING.md](CONTRIBUTING.md) for the setup steps and the
-GitHub plan requirement.
+merging. `dev` and `main` are protected, so direct pushes are rejected. See
+[CONTRIBUTING.md](CONTRIBUTING.md) for the workflow and protection rules.

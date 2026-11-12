@@ -31,10 +31,12 @@
 
 4. Wait for CI (`.github/workflows/ci.yml`) to pass and for a review.
 
-5. Merge with **Squash and merge**, then delete the topic branch.
+5. Merge feature PRs with **Squash and merge**, then delete the topic branch.
 
-6. Release: open a pull request from `dev` into `main` and merge it once
-   `dev` is stable.
+6. Release: open a pull request from `dev` into `main` and merge it with
+   **Create a merge commit** once `dev` is stable. Do not squash release PRs:
+   squash-merging a long-lived branch makes the next release PR show no
+   changes.
 
 ## Branch protection (one-time setup)
 
@@ -52,11 +54,9 @@ For **`dev`**:
 
 For **`main`**: the same rules, plus restrict direct pushes to maintainers.
 
-> **Plan requirement:** GitHub Free does not allow branch protection or
-> rulesets on private repositories — the API returns `403 Upgrade to GitHub
-> Pro`. Either upgrade to GitHub Pro or make the repository public, then
-> apply the rules above. Until then, the pull-request workflow is enforced by
-> convention only.
+> **Plan requirement:** this repository is public, so branch protection is
+> available on GitHub Free. If you ever make it private, protection requires
+> GitHub Pro (the API returns `403 Upgrade to GitHub Pro`).
 
 ## Local checks
 
