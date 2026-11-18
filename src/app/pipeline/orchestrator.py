@@ -63,10 +63,19 @@ class PipelineOrchestrator:
         self.docling_analyzer = None
         if TableAndTextAnalyzer is not None:
             try:
-                self.docling_analyzer = TableAndTextAnalyzer()
+                self.docling_analyzer = TableAndTextAnalyzer(config=self.config)
                 logger.info("Docling initialized as backup analyzer.")
             except Exception as e:
                 logger.warning(f"Docling failed to initialize: {e}")
+
+    def circuit_status(self) -> Dict[str, dict]:
+        """Current state of the analyzer circuit breakers (for /health)."""
+        status: Dict[str, dict] = {}
+        if self.ocr_analyzer is not None:
+            status["paddleocr"] = self.ocr_analyzer.breaker.snapshot()
+        if self.docling_analyzer is not None:
+            status["docling"] = self.docling_analyzer.breaker.snapshot()
+        return status
 
     async def process_batch(self, valid_files: list) -> list:
         """Process files without blocking the event loop.
@@ -101,13 +110,19 @@ class PipelineOrchestrator:
                 #    pages and the spatial/KVP extraction.
                 paddle_result = None
                 if self.ocr_analyzer is not None:
-                    try:
-                        logger.info(f"Running PaddleOCR analysis for {filename}...")
-                        paddle_result = self.ocr_analyzer.analyze_document(
-                            file_path, output_dir, doc_name
+                    if self.ocr_analyzer.breaker.is_open():
+                        logger.warning(
+                            f"{filename}: PaddleOCR circuit is open - skipping OCR "
+                            f"and using the Docling backup."
                         )
-                    except Exception as e:
-                        logger.warning(f"PaddleOCR analysis failed for {filename}: {e}")
+                    else:
+                        try:
+                            logger.info(f"Running PaddleOCR analysis for {filename}...")
+                            paddle_result = self.ocr_analyzer.analyze_document(
+                                file_path, output_dir, doc_name
+                            )
+                        except Exception as e:
+                            logger.warning(f"PaddleOCR analysis failed for {filename}: {e}")
 
                 if paddle_result:
                     page_markdown = paddle_result.get("page_markdown") or {}

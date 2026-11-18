@@ -13,6 +13,9 @@ Advanced PDF processing pipeline that extracts text, tables, images, and spatial
   used for key-value extraction
 - **Backup analyzer: Docling** — kicks in automatically when PaddleOCR is
   unavailable, fails, or returns no spatial data
+- **Circuit breaker** — repeated OCR-engine failures open a breaker so the
+  pipeline fails fast and switches to the backup analyzer instead of retrying
+  every page; the breaker half-opens for a trial call after a cooldown
 - **Key-value pair extraction** from spatial layout data (e.g., form fields)
 - **Embedded image extraction** (per page, parallel)
 - **Markdown cleaning** tuned for FPDS forms (HTML tables from PaddleOCR are
@@ -30,6 +33,10 @@ All tunables are read from environment variables:
 | `PDF_OCR_PADDLE_THREADS` | Paddle default | `cpu_threads` handed to each Paddle predictor |
 | `PDF_OCR_RENDER_SCALE` | `2.0` | Rasterisation scale for OCR (2.0 = 144 dpi) |
 | `PDF_OCR_PARALLEL_TEXT` | `true` | Run `pymupdf4llm` page extraction across the thread pool |
+| `PDF_OCR_CIRCUIT_ENABLED` | `true` | Enable circuit breakers around the OCR engines |
+| `PDF_OCR_CIRCUIT_THRESHOLD` | `3` | Consecutive document-level failures before a breaker opens |
+| `PDF_OCR_CIRCUIT_RECOVERY_SECONDS` | `60` | Cooldown before a half-open trial call is allowed |
+| `PDF_OCR_CIRCUIT_HALF_OPEN_CALLS` | `1` | Trial calls permitted while half-open |
 
 > **Note on `PDF_OCR_PARALLEL_TEXT`:** parallel page buckets are extracted with one
 > `pymupdf4llm` pass per bucket, which can shift heading depth (`#` vs `##`) on some
