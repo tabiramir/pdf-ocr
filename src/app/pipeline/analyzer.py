@@ -10,9 +10,21 @@ from typing import List, Dict, Any, Optional, Tuple
 import fitz  # PyMuPDF
 
 from app.config import PipelineConfig, load_config
+from app.utils.circuit_breaker import CircuitBreaker, CircuitOpenError
 from app.utils.cleaner import FPDSMarkdownCleaner
 
 logger = logging.getLogger(__name__)
+
+
+def _make_breaker(name: str, config: PipelineConfig) -> CircuitBreaker:
+    """Build a circuit breaker from the pipeline configuration."""
+    return CircuitBreaker(
+        name,
+        failure_threshold=config.circuit_failure_threshold,
+        recovery_timeout=config.circuit_recovery_seconds,
+        half_open_max_calls=config.circuit_half_open_calls,
+        enabled=config.circuit_enabled,
+    )
 
 try:
     from paddleocr import PPStructureV3
@@ -135,6 +147,10 @@ class PPStructureAnalyzer:
         self.engine_pool_size = max(1, int(self.config.paddle_engine_pool))
         self.render_scale = max(1.0, float(self.config.render_scale))
         self.cleaner = FPDSMarkdownCleaner()
+        # Protects the pipeline from a systematically failing OCR backend:
+        # after repeated document-level failures, pages are skipped and the
+        # backup analyzer (Docling) takes over.
+        self.breaker = _make_breaker("paddleocr", self.config)
 
         # Build the engine pool eagerly so a broken Paddle install fails at
         # startup (as it always did) instead of on the first upload.
@@ -235,13 +251,26 @@ class PPStructureAnalyzer:
           - text_content: the joined, cleaned markdown
           - metadata: {tables_count, pages_count, failed_pages}
         """
-        rendered = self._render_pages(pdf_path, output_dir, doc_name, page_numbers=None)
-        if not rendered:
-            raise RuntimeError(f"No pages could be rendered from {pdf_path}")
+        if not self.breaker.allow_request():
+            raise CircuitOpenError(
+                "PaddleOCR circuit breaker is open; using the backup analyzer."
+            )
 
-        page_results = self._predict_pages(rendered)
-        if not page_results:
-            raise RuntimeError(f"PaddleOCR failed on every page of {pdf_path}")
+        try:
+            rendered = self._render_pages(
+                pdf_path, output_dir, doc_name, page_numbers=None
+            )
+            if not rendered:
+                raise RuntimeError(f"No pages could be rendered from {pdf_path}")
+
+            page_results = self._predict_pages(rendered)
+            if not page_results:
+                raise RuntimeError(f"PaddleOCR failed on every page of {pdf_path}")
+        except Exception as exc:  # noqa: BLE001 - account for any document failure
+            self.breaker.record_failure(exc)
+            raise
+
+        self.breaker.record_success()
 
         scales = {page_num: scale for page_num, _, scale in rendered}
 
@@ -283,11 +312,28 @@ class PPStructureAnalyzer:
         self, pdf_path: str, output_dir: str, doc_name: str, page_numbers: list
     ) -> dict:
         """OCR only the requested (1-based) pages. Returns {page_num: markdown}."""
-        rendered = self._render_pages(pdf_path, output_dir, doc_name, page_numbers)
-        if not rendered:
+        if not self.breaker.allow_request():
+            raise CircuitOpenError(
+                "PaddleOCR circuit breaker is open; skipping OCR retry."
+            )
+
+        try:
+            rendered = self._render_pages(
+                pdf_path, output_dir, doc_name, page_numbers
+            )
+            if not rendered:
+                return {}
+
+            page_results = self._predict_pages(rendered)
+        except Exception as exc:  # noqa: BLE001 - account for any document failure
+            self.breaker.record_failure(exc)
+            raise
+
+        if not page_results:
+            self.breaker.record_failure(RuntimeError("OCR returned no pages"))
             return {}
 
-        page_results = self._predict_pages(rendered)
+        self.breaker.record_success()
         results = {}
         for page_num, result_list in sorted(page_results.items()):
             md = self._page_markdown(result_list, output_dir)
@@ -572,9 +618,12 @@ class TableAndTextAnalyzer:
     the PaddleOCR path working even when docling is not installed).
     """
 
-    def __init__(self):
+    def __init__(self, config: Optional[PipelineConfig] = None):
         from docling.document_converter import DocumentConverter
         from docling.datamodel.base_models import InputFormat
+
+        self.config = config or load_config()
+        self.breaker = _make_breaker("docling", self.config)
 
         # Initialize Docling Converter
         self.converter = DocumentConverter(
@@ -595,8 +644,9 @@ class TableAndTextAnalyzer:
         }
 
         try:
-            # 1. Convert PDF
-            conv_result = self.converter.convert(pdf_path)
+            # 1. Convert PDF (guarded by the circuit breaker: a failing
+            #    Docling install is skipped instead of retried per document)
+            conv_result = self.breaker.call(self.converter.convert, pdf_path)
 
             # 2. Export to Markdown
             raw_markdown = conv_result.document.export_to_markdown()

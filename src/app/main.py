@@ -118,4 +118,7 @@ async def process_batch_pdfs(
 
 @app.get("/health")
 def health_check():
-    return {"status": "healthy"}
+    return {
+        "status": "healthy",
+        "circuit_breakers": orchestrator.circuit_status(),
+    }

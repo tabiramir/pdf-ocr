@@ -68,6 +68,14 @@ class PipelineConfig:
     # Run pymupdf4llm page extraction across the thread pool.
     parallel_text: bool = True
 
+    # Circuit breaker around the OCR engines. After this many consecutive
+    # document-level failures the engine is skipped and the backup analyzer is
+    # used; a trial call is allowed once the recovery timeout has elapsed.
+    circuit_enabled: bool = True
+    circuit_failure_threshold: int = 3
+    circuit_recovery_seconds: float = 60.0
+    circuit_half_open_calls: int = 1
+
     @classmethod
     def from_env(cls) -> "PipelineConfig":
         return cls(
@@ -76,6 +84,16 @@ class PipelineConfig:
             paddle_cpu_threads=max(0, _env_int("PDF_OCR_PADDLE_THREADS", 0)),
             render_scale=_env_float("PDF_OCR_RENDER_SCALE", 2.0),
             parallel_text=_env_bool("PDF_OCR_PARALLEL_TEXT", True),
+            circuit_enabled=_env_bool("PDF_OCR_CIRCUIT_ENABLED", True),
+            circuit_failure_threshold=max(
+                1, _env_int("PDF_OCR_CIRCUIT_THRESHOLD", 3)
+            ),
+            circuit_recovery_seconds=max(
+                0.0, _env_float("PDF_OCR_CIRCUIT_RECOVERY_SECONDS", 60.0)
+            ),
+            circuit_half_open_calls=max(
+                1, _env_int("PDF_OCR_CIRCUIT_HALF_OPEN_CALLS", 1)
+            ),
         )
 
 
